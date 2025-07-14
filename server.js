@@ -2,7 +2,18 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require("path");
-require('dotenv').config();
+const dotenv = require("dotenv");
+
+// ✅ โหลด env ตาม NODE_ENV
+const envFile =
+  process.env.NODE_ENV === "production"
+    ? ".env.production"
+    : ".env.development";
+
+dotenv.config({
+  path: path.resolve(__dirname, envFile)
+});
+console.log(`✅ Loaded environment config from ${envFile}`);
 
 const userRoutes = require('./routes/userRoutes');
 const menuRoutes = require('./routes/menuRoutes');
@@ -10,7 +21,6 @@ const projectsRouter = require('./routes/projectsRoutes');
 const lineWebhookRoutes = require("./routes/line/lineWebhook");
 const lineMessageRoutes = require("./routes/line/lineMessageRoutes");
 const fileRoutes = require("./routes/fileRoutes");
-
 
 const app = express();
 app.use(cors());
@@ -25,9 +35,14 @@ app.use(
   express.static(path.join(__dirname, "for_downloaded_file"))
 );
 app.use("/api/files", fileRoutes);
+
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => {
+  .then(async () => {
+    const admin = new mongoose.mongo.Admin(mongoose.connection.db);
+    const info = await admin.buildInfo();
+    console.log(`✅ Connected to MongoDB version: ${info.version}`);
+
     app.listen(process.env.PORT, () =>
       console.log(`✅ Server running at http://localhost:${process.env.PORT}`)
     );
