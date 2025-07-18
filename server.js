@@ -21,6 +21,7 @@ const projectsRouter = require('./routes/projectsRoutes');
 const lineWebhookRoutes = require("./routes/line/lineWebhook");
 const lineMessageRoutes = require("./routes/line/lineMessageRoutes");
 const fileRoutes = require("./routes/fileRoutes");
+const fileRoutesS3 = require("./routes/fileRoutesS3");
 
 const app = express();
 app.use(cors());
@@ -35,6 +36,7 @@ app.use(
   express.static(path.join(__dirname, "for_downloaded_file"))
 );
 app.use("/api/files", fileRoutes);
+app.use("/api", fileRoutesS3);
 
 mongoose
   .connect(process.env.MONGO_URI)
