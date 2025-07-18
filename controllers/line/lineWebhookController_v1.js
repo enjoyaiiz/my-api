@@ -1,9 +1,11 @@
 const axios = require("axios");
 const LineMessage = require("../../models/LineMessage");
-const { saveFileToS3 } = require("../../utils/saveFileToS3");
+const { saveFile } = require("../../utils/saveFile");
 const CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
 exports.handleWebhook = async (req, res) => {
+  // console.log("📦 Webhook Payload:", JSON.stringify(req.body, null, 2));
+
   const events = req.body.events || [];
 
   for (const event of events) {
@@ -21,39 +23,47 @@ exports.handleWebhook = async (req, res) => {
       messageSender: "customer"
     };
 
-    // ----- TEXT -----
+    // ------------------------------
+    // 1) TEXT MESSAGE
+    // ------------------------------
     if (event.type === "message" && event.message.type === "text") {
       newMessage.text = event.message.text;
       newMessage.messageType = "text";
     }
 
-    // ----- IMAGE -----
+    // ------------------------------
+    // 2) IMAGE MESSAGE
+    // ------------------------------
     else if (event.type === "message" && event.message.type === "image") {
       const messageId = event.message.id;
       const contentBuffer = await getContent(messageId);
-      const fileName = `images/downloaded_${messageId}.jpg`;
-      await saveFileToS3(contentBuffer, fileName, "image/jpeg");
+      const fileName = `downloaded_${messageId}.jpg`;
+      const fullPath = saveFile("image", contentBuffer, fileName);
 
       newMessage.text = "[image]";
       newMessage.messageType = "image";
       newMessage.sourceFile = fileName;
     }
 
-    // ----- FILE -----
+    // ------------------------------
+    // 3) FILE MESSAGE
+    // ------------------------------
     else if (event.type === "message" && event.message.type === "file") {
       const messageId = event.message.id;
       const parts = event.message.fileName.split(".");
       const extension = parts.length > 1 ? parts.pop() : "";
-      const fileName = `files/downloaded_${messageId}.${extension}`;
+      const fileName = `downloaded_${messageId}.${extension}`;
       const contentBuffer = await getContent(messageId);
-      await saveFileToS3(contentBuffer, fileName, event.message.fileName.mimetype || "application/octet-stream");
+      const fullPath = saveFile("file", contentBuffer, fileName);
 
       newMessage.text = event.message.fileName;
       newMessage.messageType = "file";
       newMessage.sourceFile = fileName;
     }
 
-    // ----- SAVE TO MONGODB -----
+    // ------------------------------
+    // 4) บันทึกลง MongoDB
+    // ------------------------------
     if (newMessage.messageType) {
       const result = await LineMessage.updateOne(
         { userId },
@@ -70,6 +80,7 @@ exports.handleWebhook = async (req, res) => {
       );
 
       if (result.matchedCount === 0) {
+        // ยังไม่มี record
         await LineMessage.create({
           userId,
           displayName: profile.displayName,
@@ -77,13 +88,17 @@ exports.handleWebhook = async (req, res) => {
           statusMessage: profile.statusMessage,
           messages: [newMessage]
         });
+        // console.log(`🆕 สร้าง record ใหม่ของ ${profile.displayName}`);
+      } else {
+        // console.log(`✅ เพิ่มข้อความใหม่ของ ${profile.displayName}`);
       }
     }
   }
+
   res.status(200).send("OK");
 };
 
-// --- helper สำหรับดาวน์โหลดไฟล์ LINE ---
+// ดาวน์โหลดไฟล์
 async function getContent(messageId) {
   const response = await axios.get(
     `https://api-data.line.me/v2/bot/message/${messageId}/content`,
@@ -97,6 +112,7 @@ async function getContent(messageId) {
   return response.data;
 }
 
+// ดึงโปรไฟล์
 async function getUserProfile(userId) {
   const res = await axios.get(
     `https://api.line.me/v2/bot/profile/${userId}`,
@@ -107,4 +123,21 @@ async function getUserProfile(userId) {
     }
   );
   return res.data;
+}
+
+// ตอบกลับ
+async function replyMessage(replyToken, text) {
+  await axios.post(
+    "https://api.line.me/v2/bot/message/reply",
+    {
+      replyToken,
+      messages: [{ type: "text", text }]
+    },
+    {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${CHANNEL_ACCESS_TOKEN}`
+      }
+    }
+  );
 }
