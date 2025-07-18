@@ -18,9 +18,11 @@ exports.getAllMessages = async (req, res) => {
         fileUrl: msg.sourceFile
           ? `${baseUrl}/api/line-messages/file/${encodeURIComponent(msg.sourceFile)}`
           : undefined
+          
       }))
     }));
 
+    console.log(data);
     res.json(data);
   } catch (err) {
     console.error(err);
