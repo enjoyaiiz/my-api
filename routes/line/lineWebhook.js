@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const lineWebhookController = require("../../controllers/line/lineWebhookController_v1");
+const lineWebhookController = require("../../controllers/line/lineWebhookController");
 
 router.post("/", lineWebhookController.handleWebhook);
 
